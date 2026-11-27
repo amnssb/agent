@@ -103,6 +103,7 @@ describe('项目结构', () => {
         // utils 本身是通用工具，原则上不互相引用。
         // 但下列文件依赖 path.js / command.js / fs.js 属于合理的基础工具依赖，逐条写明允许避免静默扩大。
         const allowed = new Map([
+            ['context-inspect.js', new Set(['./context-usage.js', './fail.js', './path.js'])],
             ['context-ratios.js', new Set(['./path.js'])],
             ['context-usage.js',  new Set(['./path.js'])],
             ['process.js',        new Set(['./path.js', './command.js'])],

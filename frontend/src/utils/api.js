@@ -67,6 +67,7 @@ export const AgentAPI = {
   modelIconUrl:     (model = '', family = '', theme = '') => `${apiRoot}/admin?op=model.icon&model=${encodeURIComponent(model)}${family ? `&family=${encodeURIComponent(family)}` : ''}${theme ? `&theme=${encodeURIComponent(theme)}` : ''}&v=${modelIconRevision}`,
   // 全部工具和当前权限，设置页画开关用。
   getTools:         ()                          => admin('tool.list'),
+  contextInspect:   (sessionId)                 => admin('context.inspect', { sessionId }),
   // 工具类别；名字和顺序由后端给。
   getToolKinds:     ()                          => admin('tool.kinds'),
   // 本机 MCP：已配置的服务 + 其他软件留下的配置（env / headers 只有键名）。

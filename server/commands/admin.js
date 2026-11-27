@@ -29,6 +29,7 @@ import Review from '../features/review.js'
 import SessionGroups from '../features/session-groups.js'
 import Storage from '../features/storage.js'
 import Tool from '../features/tool.js'
+import ContextInspect from '../utils/context-inspect.js'
 import fail from '../utils/fail.js'
 
 // --- 配置导出走原始 Response：保留下载文件名和脱敏规则 ---
@@ -142,6 +143,9 @@ const OPS = {
     'fs.entries': query => Filesystem.entries({ path: query?.path, mode: query?.mode }),
     'tool.list': () => Tool.list(),
     'tool.kinds': () => Tool.KINDS,
+
+    // --- 上下文检查器 ---
+    'context.inspect': ({ sessionId } = {}) => ContextInspect.inspect({ sessionId }),
 
     // --- 进程收尾 ---
     // 强制结束 Bun 进程不会走 SIGTERM，MCP 子进程会握着监听套接字，
