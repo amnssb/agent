@@ -190,6 +190,39 @@ describe('Monitor 工具与调度流转', () => {
             Chat.send = originalSend
         }
     }))
+
+    test('monitors.json 损坏时备份坏档并告警，不抛错也不清空已有内存监控', () => withHome(async root => {
+        const sessionId = 'corrupt-mon-1'
+        store.sessions[sessionId] = { id: sessionId, cwd: tmpdir(), running: false }
+
+        // 先挂载并持久化一条监控，确认产物是合法 JSON
+        await MonitorEngine.arm({
+            sessionId,
+            condition: { kind: 'timer', afterSeconds: 60 },
+            objective: '保持监控',
+        })
+        const dir = join(root, 'sessions', sessionId)
+        const saved = JSON.parse(await Bun.file(join(dir, 'monitors.json')).text())
+        expect(saved).toHaveLength(1)
+
+        // 把磁盘文件破坏成非法 JSON，再调 loadSession
+        await writeFile(join(dir, 'monitors.json'), '{broken json')
+        const errors = []
+        const originalError = console.error
+        console.error = (...args) => errors.push(args.join(' '))
+        try {
+            await expect(MonitorEngine.loadSession(sessionId)).resolves.toBeUndefined()
+        } finally {
+            console.error = originalError
+        }
+
+        // 不清空现有监控、告警可见、坏档被改名保留
+        expect(MonitorEngine.list({ sessionId })).toHaveLength(1)
+        expect(errors.some(line => line.includes('监控文件损坏'))).toBe(true)
+        const broken = await Array.fromAsync(new Bun.Glob('monitors.json.broken-*').scan({ cwd: dir }))
+        expect(broken).toHaveLength(1)
+        expect(await Bun.file(join(dir, 'monitors.json')).exists()).toBe(false)
+    }))
 })
 
 describe('后端集成扩展 patch', () => {

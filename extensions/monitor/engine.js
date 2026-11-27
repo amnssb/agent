@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import store from '@agent/store.js'
 import Chat from '@agent/commands/chat.js'
 import History from '@agent/features/history.js'
+import Fs from '@agent/utils/fs.js'
 import Path from '@agent/utils/path.js'
 
 import ProcessCondition from './conditions/process.js'
@@ -45,7 +46,7 @@ const saveSessionMonitors = async sessionId => {
     const list = [...records.values()].filter(m => m.sessionId === sessionId)
     const file = monitorFilePath(sessionId)
     try {
-        await Bun.write(file, JSON.stringify(list, null, 2))
+        await Fs.writeJson(file, list)
     } catch (error) {
         console.error(`[monitor] 会话 ${sessionId} 监控持久化失败: ${error.message}`)
     }
@@ -309,21 +310,21 @@ const MonitorEngine = {
 
     // --- 从指定会话加载历史监控记录 ---
     async loadSession(sessionId) {
-        const file = Bun.file(monitorFilePath(sessionId))
-        if (!await file.exists()) return
-        try {
-            const list = await file.json()
-            if (!Array.isArray(list)) return
-            for (const item of list) {
-                if (item.id && !records.has(item.id)) {
-                    // 若已超过 TTL，置为 expired
-                    if (Date.now() >= item.expiresAt) item.status = 'expired'
-                    records.set(item.id, item)
-                    const num = parseInt(item.id.slice(1), 10)
-                    if (!isNaN(num) && num >= nextIdNum) nextIdNum = num + 1
-                }
+        const list = await Fs.readJsonGuarded(monitorFilePath(sessionId), null, {
+            onCorrupt: ({ backupPath, error }) => {
+                console.error(`[monitor] 会话 ${sessionId} 监控文件损坏，已备份至 ${backupPath}: ${error.message}`)
+            },
+        })
+        if (!Array.isArray(list)) return
+        for (const item of list) {
+            if (item.id && !records.has(item.id)) {
+                // 若已超过 TTL，置为 expired
+                if (Date.now() >= item.expiresAt) item.status = 'expired'
+                records.set(item.id, item)
+                const num = parseInt(item.id.slice(1), 10)
+                if (!isNaN(num) && num >= nextIdNum) nextIdNum = num + 1
             }
-        } catch {}
+        }
     },
 }
 

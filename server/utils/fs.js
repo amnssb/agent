@@ -9,12 +9,14 @@
  *   await Fs.exists(path)
  *   await Fs.isDirectory(path)
  *   const data = await Fs.readJson(file, {})
+ *   const guarded = await Fs.readJsonGuarded(file, {}, { onCorrupt: ({ backupPath }) => ... })
  *   await Fs.writeJson(file, value)
  *   Fs.inside(root, target)
  */
 
-import { access, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, rename, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { writeFile } from 'atomically'
 
 // --- 路径是否存在；不存在或没权限都算不存在 ---
 const exists = async path => {
@@ -55,13 +57,32 @@ const readJson = async (path, fallback = null) => {
     }
 }
 
-// --- 原子写 JSON：先写临时文件再 rename，中途崩溃不会留下半份 ---
+// --- 读重要状态 JSON：内容损坏时把坏档改名留证并告警，不静默当成空白 ---
+const readJsonGuarded = async (path, fallback = null, { onCorrupt } = {}) => {
+    let raw
+    try {
+        raw = await readFile(path, 'utf8')
+    } catch (error) {
+        if (error?.code === 'ENOENT') return fallback           // 文件尚未建立属于正常情况
+        throw error
+    }
+    try {
+        return JSON.parse(raw)
+    } catch (error) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const backupPath = `${path}.broken-${stamp}`
+        await rename(path, backupPath).catch(() => {})          // 坏档隔离留证，防止下次写入直接覆盖丢失
+        if (onCorrupt) onCorrupt({ path, backupPath, error })
+        else console.error(`[fs] JSON 损坏，已备份至 ${backupPath}: ${error.message}`)
+        return fallback
+    }
+}
+
+// --- 原子写 JSON：走 atomically 临时文件+rename，中途崩溃不会留下半份 ---
 // 模式 0600：这些文件里可能有密钥（MCP 的 env、供应商的 apiKey）。
 const writeJson = async (path, value, { mode = 0o600 } = {}) => {
     await mkdir(dirname(path), { recursive: true })
-    const temporary = `${path}.tmp-${crypto.randomUUID()}`
-    await writeFile(temporary, JSON.stringify(value, null, 2), { encoding: 'utf8', mode })
-    await rename(temporary, path)
+    await writeFile(path, JSON.stringify(value, null, 2), { encoding: 'utf8', mode })
 }
 
 // --- child 是否在 parent 里面（含相等） ---
@@ -79,5 +100,5 @@ const within = (parent, child) => {
     return target !== base && inside(base, target)
 }
 
-export { exists, isDirectory, isFile, readJson, writeJson, inside, within }
-export default { exists, isDirectory, isFile, readJson, writeJson, inside, within }
+export { exists, isDirectory, isFile, readJson, readJsonGuarded, writeJson, inside, within }
+export default { exists, isDirectory, isFile, readJson, readJsonGuarded, writeJson, inside, within }

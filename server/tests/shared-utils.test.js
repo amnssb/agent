@@ -55,6 +55,22 @@ describe('Fs 文件系统判断', () => {
         expect(await Fs.readJson(broken, 'fallback')).toBe('fallback')
     })
 
+    test('readJsonGuarded 缺失时静默返回 fallback，坏档时改名备份并回调', async () => {
+        expect(await Fs.readJsonGuarded(join(root, 'absent.json'), { ok: false })).toEqual({ ok: false })
+        const dir = join(root, 'guarded')
+        await mkdir(dir, { recursive: true })
+        const target = join(dir, 'state.json')
+        await write(target, '{corrupt')
+
+        let reported = null
+        const result = await Fs.readJsonGuarded(target, { ok: false }, { onCorrupt: info => { reported = info } })
+        expect(result).toEqual({ ok: false })
+        expect(reported?.path).toBe(target)
+        expect(reported?.backupPath).toContain('state.json.broken-')
+        expect(await Fs.exists(target)).toBe(false)
+        expect(await Fs.exists(reported.backupPath)).toBe(true)
+    })
+
     test('writeJson 能建目录、能读回，且不留下临时文件', async () => {
         const target = join(root, 'deep/nested/data.json')
         await Fs.writeJson(target, { ok: true })

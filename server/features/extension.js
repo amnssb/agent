@@ -30,6 +30,7 @@ import { readdir, watch } from 'node:fs/promises'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, sep } from 'node:path'
 import { homedir } from 'node:os'
+import Fs from '../utils/fs.js'
 import Path from '../utils/path.js'
 import fail from '../utils/fail.js'
 
@@ -108,11 +109,14 @@ const describe = async entry => {
 
 // --- 用户关掉的扩展名单 ---
 const readDisabled = async () => {
-    const file = Bun.file(stateFile())
-    const data = await file.exists() ? await file.json().catch(() => ({})) : {}
-    return new Set(Array.isArray(data.disabled) ? data.disabled.map(String) : [])
+    const data = await Fs.readJsonGuarded(stateFile(), {}, {
+        onCorrupt: ({ backupPath, error }) => {
+            console.error(`[extensions] 禁用名单文件损坏，已备份至 ${backupPath}: ${error.message}`)
+        },
+    })
+    return new Set(Array.isArray(data?.disabled) ? data.disabled.map(String) : [])
 }
-const saveDisabled = () => Bun.write(stateFile(), JSON.stringify({ disabled: [...disabled].sort() }, null, 2))
+const saveDisabled = () => Fs.writeJson(stateFile(), { disabled: [...disabled].sort() })
 
 // --- 方法包装链：原方法在最底层，每个扩展的包装按加载顺序叠上去 ---
 // 拔掉任意一层都从原方法重新叠一遍，所以中间那层拔掉后上下两层仍然接得上。
