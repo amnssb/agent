@@ -76,4 +76,15 @@ export default defineConfig({                       // 导出前端开发与构�
   preview: {
     proxy: { '/api': apiProxy },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // 拆出图标库和 Markdown/高亮渲染依赖，避免打进首包 index（后续 icon 仍待按需 subpath 引入）
+        manualChunks(id) {
+          if (id.includes('@hugeicons/')) return 'vendor-icons'
+          if (id.includes('markstream-vue') || id.includes('highlight.js')) return 'vendor-markdown'
+        },
+      },
+    },
+  },
 })
