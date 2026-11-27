@@ -260,8 +260,13 @@ test('remembered approval crosses sessions and hard deny cannot be bypassed', as
     expect((await cli('sessions', 'decide', id, 'read-1', 'allow')).code).toBe(0)
     const completed = await waitIdle(id)
     expect(JSON.stringify(completed.history)).toContain('fixture file contents')
-    expect((await cli('ask', '[tool]', '--session', id)).code).toBe(0)
-    expect((await cli('ask', '[tool]', '--title', 'new remembered session')).code).toBe(0)
+    // 单次 allow 只放行这一次，不会改配置；下次仍会停在审批（code 1）
+    expect((await cli('ask', '[tool]', '--session', id)).code).toBe(1)
+
+    // 显式写入 read_file: 'allow' 规则后跨会话自动放行
+    config.permission = { '*': 'ask', read_file: 'allow' }
+    await fetch(`${address}/admin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'config.set', config }) })
+    expect((await cli('ask', '[tool]', '--title', 'new allowed session')).code).toBe(0)
 
     config.permission = { '*': 'ask', read_file: 'deny' }
     await fetch(`${address}/admin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'config.set', config }) })

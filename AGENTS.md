@@ -169,7 +169,13 @@ CLI 改了请求或运行流程时，先构建 `cli/cmd/agent` 到 `tmp/cli-test
 ## Agent 循环来自外部包
 
 模型请求、工具执行、上下文压缩由已发布的 `@kernel4632/agent-core` 负责（[仓库](https://github.com/kernel4632/agent-core)），本项目不再自带实现。
-升级这个包之前先看它的 README 里「从 X 升级」的说明，升级后在同一个提交里跑一遍后端测试。
+升级这个包之前先看它的 README 里「从 X 升级」的说明，升级后按以下 SOP 在同一个提交里完成全链路验证：
+
+1. 更新 `server/package.json` 并在 `server/` 执行 `bun install`。
+2. 后台运行 `cd server && bun test` 确认后端全量通过。
+3. 构建 CLI 并跑集成测试（core 协议变化会直接打在 CLI 上）：
+   `cd cli && go build -o ../tmp/cli-test/agent ./cmd/agent && bun test tests/integration.test.js --timeout 30000`。
+4. 若 core 的 SSE `Event` 类型或历史字段有 diff，先对照更新 `frontend/src/commands/chat.js` 的 `receive()` 分支与事件集合（dev 态未知事件会打 `console.warn`），再跑 `cd frontend && bun run test && bun run build`。
 
 **第三方包的 bug 不在本仓库里修**：排查确认根因在 agent-core 或其它第三方包里时，不要擅自改包的代码或打临时补丁；把根因、复现方式和期望行为整理成 issue 报给那个包的仓库，由包作者先修、发新版，再按上面的升级流程更新进来。本仓库侧只做：绕过手段（如果能在自己代码里合理避开）和等新版适配。
 
