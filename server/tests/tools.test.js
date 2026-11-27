@@ -56,11 +56,9 @@ describe('工具目录', () => {
             expect(byName.my_tool.permission).toBe('ask')
             expect(byName.my_tool.kind).toBe('other')
             expect(byName.my_tool.ui?.view).toBe('custom')
-            // new_task 暂不下发（子智能体正式版再引入）；cwd 工具已删除。
+            // new_task 暂不下发（子智能体正式版再引入）；cwd 工具已删除；todo 工具已迁至 extensions/todo。
             expect(byName.new_task).toBeUndefined()
             expect(byName.cwd).toBeUndefined()
-            expect(byName.update_todo_list.configurable).toBe(false)
-            expect(byName.update_todo_list.ui?.view).toBe('todo')
             expect(byName.attempt_completion.ui?.view).toBe('completion')
         })
     })

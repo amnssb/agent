@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { read_file, write_file, find_files, search_text, edit } from '../tools/file.js'
 import shell from '../tools/shell.js'
-import todo from '../tools/todo.js'
+import todo from '../../extensions/todo/tool.js'
 
 const root = await mkdtemp(join(tmpdir(), 'agent-tool-api-'))
 

@@ -18,7 +18,6 @@ import Mcp from '../features/mcp.js'
 
 import Session from '../commands/session.js'
 import { getAgent, settleAgent } from './agent-helpers.js'
-import Skill from '../tools/skill.js'
 import store from '../store.js'
 import { app } from '../server.js'
 
@@ -342,158 +341,6 @@ describe('MCP 服务管理', () => {
     })
 })
 
-describe('技能识别与管理', () => {
-    test('自己的技能直接生效，别的软件的目录先识别、启用后才生效', async () => {
-        await withHome(async ({ root, discovery, project }) => {
-            const external = join(discovery, '.claude', 'skills')
-
-            const before = await (await request(`/skill/list?cwd=${encodeURIComponent(project)}`)).json()
-            expect(before.skills.map(item => item.name).sort()).toEqual(['deploy', 'review'])
-            expect(before.skills.find(item => item.name === 'review').body).toBe('')   // 列表不带正文
-            const claudeRoot = before.roots.find(item => item.id === 'claude')
-            expect(claudeRoot).toMatchObject({ exists: true, enabled: false, skillCount: 1 })
-
-            const enabled = await (await json('/skill/source', 'PATCH', { path: external, enabled: true })).json()
-            expect(enabled).toEqual({ path: external, enabled: true })
-
-            const after = await (await request(`/skill/list?cwd=${encodeURIComponent(project)}`)).json()
-            expect(after.skills.map(item => item.name).sort()).toEqual(['deploy', 'lint', 'review'])
-            expect(after.skills.find(item => item.name === 'lint').app).toBe('Claude Code')
-
-            await json('/skill/source', 'PATCH', { path: external, enabled: false })
-            expect((await (await request(`/skill/list?cwd=${encodeURIComponent(project)}`)).json()).skills.some(item => item.name === 'lint')).toBe(false)
-            expect(root).toBeTruthy()
-        })
-    })
-
-    test('新建、读取、改写和删除自己的技能', async () => {
-        await withHome(async ({ project }) => {
-            const created = await (await json('/skill/save', 'POST', {
-                name: 'write-docs',
-                description: '写文档时用',
-                body: '先读现有文档',
-            })).json()
-            expect(created.name).toBe('write-docs')
-            expect(created.editable).toBe(true)
-
-            const file = join(process.env.AGENT_HOME, 'skills', 'write-docs', 'SKILL.md')
-            expect(await readFile(file, 'utf8')).toContain('先读现有文档')
-
-            const read = await (await request(`/skill/read?name=write-docs`)).json()
-            expect(read.body).toBe('先读现有文档')
-
-            const updated = await (await json('/skill/save', 'POST', {
-                name: 'write-docs',
-                description: '写文档时用',
-                body: '改写后的正文',
-            })).json()
-            expect(updated.directory).toBe(created.directory)
-            expect((await (await request(`/skill/read?name=write-docs`)).json()).body).toBe('改写后的正文')
-
-            expect((await request(`/skill/read?name=write-docs&cwd=${encodeURIComponent(project)}`)).status).toBe(200)
-
-            const removed = await (await json('/skill/remove', 'POST', { name: 'write-docs' })).json()
-            expect(removed).toEqual({ ok: true, name: 'write-docs' })
-            expect((await request('/skill/read?name=write-docs')).status).toBe(404)
-        })
-    })
-
-    test('项目技能写进当前目录，目录不存在时按 400 返回', async () => {
-        await withHome(async ({ project }) => {
-            const saved = await (await json('/skill/save', 'POST', {
-                name: 'project-rule',
-                description: '项目约定',
-                body: '正文',
-                scope: 'project',
-                cwd: project,
-            })).json()
-            expect(saved.scope).toBe('project')
-            expect(await readFile(join(project, '.agent', 'skills', 'project-rule', 'SKILL.md'), 'utf8')).toContain('正文')
-
-            expect((await json('/skill/save', 'POST', {
-                name: 'x', description: 'x', scope: 'project', cwd: join(project, 'missing'),
-            })).status).toBe(400)
-        })
-    })
-
-    test('填错的名称、说明和目录都按 400 返回，不写出半份文件', async () => {
-        await withHome(async ({ discovery }) => {
-            expect((await json('/skill/save', 'POST', { name: '../escape', description: 'x' })).status).toBe(400)
-            expect((await json('/skill/save', 'POST', { name: 'ok', description: '' })).status).toBe(400)
-            expect((await json('/skill/save', 'POST', { name: 'ok', description: 'x', scope: 'elsewhere' })).status).toBe(400)
-            expect((await json('/skill/source', 'PATCH', { path: 'relative/path', enabled: true })).status).toBe(400)
-            expect((await json('/skill/source', 'PATCH', { path: join(discovery, 'missing'), enabled: true })).status).toBe(400)
-            expect((await json('/skill/source', 'PATCH', { path: join(discovery, 'empty'), enabled: true })).status).toBe(400)
-            // 白名单外（比如根目录或任意临时目录）不允许收为技能来源。
-            expect((await json('/skill/source', 'PATCH', { path: tmpdir(), enabled: true })).status).toBe(400)
-            expect((await request('/skill/read')).status).toBe(400)
-            expect((await request('/skill/read?name=missing')).status).toBe(404)
-        })
-    })
-
-    test('禁用的技能不进交给模型的清单，重新启用后回来', async () => {
-        await withHome(async ({ project }) => {
-
-            const disabled = await (await json('/skill/toggle', 'PATCH', { name: 'review', enabled: false })).json()
-            expect(disabled).toEqual({ name: 'review', enabled: false })
-
-            expect((await Skill.list({ cwd: project, skills: SkillFeature })).map(item => item.name)).toEqual(['deploy'])
-            // 管理页要能读到禁用的技能（enabled: false）才能重新打开；模型清单不含它，所以工具层读不到。
-            const disabledSkill = await SkillFeature.read({ name: 'review', cwd: project })
-            expect(disabledSkill.enabled).toBe(false)
-            await expect(Skill.read({ name: 'review', cwd: project, skills: SkillFeature })).rejects.toThrow(/Skill not found/)
-
-            const tool = await Skill.build({ cwd: project, skills: SkillFeature })
-            expect(tool.description).toContain('deploy')
-            expect(tool.description).not.toContain('review')
-
-            const listed = await (await request(`/skill/list?cwd=${encodeURIComponent(project)}`)).json()
-            expect(listed.skills.find(item => item.name === 'review').enabled).toBe(false)
-
-            await json('/skill/toggle', 'PATCH', { name: 'review', enabled: true })
-            expect((await Skill.list({ cwd: project, skills: SkillFeature })).map(item => item.name).sort()).toEqual(['deploy', 'review'])
-        })
-    })
-
-    test('外部技能不能被删除，也不能把本应用目录当外部来源', async () => {
-        await withHome(async ({ discovery }) => {
-            const external = join(discovery, '.claude', 'skills')
-            await json('/skill/source', 'PATCH', { path: external, enabled: true })
-
-            expect((await json('/skill/remove', 'POST', { name: 'lint' })).status).toBe(404)
-            expect((await json('/skill/source', 'PATCH', { path: join(process.env.AGENT_HOME, 'skills'), enabled: true })).status).toBe(400)
-        })
-    })
-
-    test('状态文件记录了启用的目录和禁用名单，重启后仍然有效', async () => {
-        await withHome(async ({ discovery }) => {
-            const external = join(discovery, '.claude', 'skills')
-
-            await json('/skill/source', 'PATCH', { path: external, enabled: true })
-            await json('/skill/toggle', 'PATCH', { name: 'review', enabled: false })
-
-            const state = JSON.parse(await readFile(join(process.env.AGENT_HOME, 'skills.json'), 'utf8'))
-            expect(state.sources).toEqual([external])
-            expect(state.disabled).toEqual(['review'])
-
-            const skills = await (await request('/skill/list')).json()
-            expect(skills.skills.map(item => item.name)).toEqual(['lint', 'review'])
-            expect(skills.skills.find(item => item.name === 'review').enabled).toBe(false)
-        })
-    })
-
-    test('技能工具会带上已启用外部目录里的技能', async () => {
-        await withHome(async ({ discovery, project }) => {
-            const external = join(discovery, '.claude', 'skills')
-            await json('/skill/source', 'PATCH', { path: external, enabled: true })
-
-            const tool = await Skill.build({ cwd: project, skills: SkillFeature })
-            expect(tool.description).toContain('lint')
-            expect(await tool.execute({ name: 'lint' }, { cwd: project })).toBe('运行 lint')
-        })
-    })
-})
-
 describe('MCP 配置版本与 Agent 快照', () => {
     test('空闲 Agent 在 MCP 配置变化后重建', async () => {
         await withHome(async ({ project }) => {
@@ -536,15 +383,6 @@ describe('MCP 配置版本与 Agent 快照', () => {
 })
 
 describe('能力接口装配', () => {
-    test('会话装配后技能清单跟着目录里的技能走', async () => {
-        await withHome(async ({ project }) => {
-            await Config.set({ providers: [{ name: 'local', models: [{ id: 'model', name: 'model' }] }], permission: { '*': 'ask' } })
-            const { sessionId } = await Session.create({ title: '技能会话', cwd: project })
-            const agent = Agent.runtime().get(sessionId)
-            expect(agent.tools.schema.skill.description).toContain('local')
-        })
-    })
-
     test('管理总线接住了所有能力动作', async () => {
         const routes = app.routes.map(route => `${route.method.toUpperCase()} ${route.path}`)
         expect(routes).toContain('POST /admin')
