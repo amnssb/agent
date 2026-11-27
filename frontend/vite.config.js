@@ -7,6 +7,12 @@ import { defineConfig } from 'vite'                 // 引入 Vite 配置声明�
 import vue from '@vitejs/plugin-vue'                // 引入 Vue 单文件组件编译能力
 
 const serverURL = process.env.AGENT_SERVER_URL ?? 'http://127.0.0.1:3000'
+const apiProxy = {                                  // 将浏览器 /api 请求转发到 Agent Server
+  target: serverURL,                                // 转发到当前真实 Agent Server
+  changeOrigin: true,                               // 使用目标主机头兼容本地服务
+  headers: { origin: new URL(serverURL).origin },   // 补齐同源 Origin 头，避免被服务端守卫判成跨源 403
+  rewrite: path => path.replace(/^\/api/, ''),      // Server 路由本身不包含 /api
+}
 
 function openAIProxy() {
   async function handle(request, response, next) {
@@ -64,14 +70,10 @@ export default defineConfig({                       // 导出前端开发与构�
     port: 5173,                                     // 使用 Vite 常见开发端口
     strictPort: false,                              // 被占用时自动选择下一个可用端口
     proxy: {                                        // 将浏览器 API 请求转发到 Agent Server
-      '/api': {                                     // 前端统一使用 /api 前缀避免跨域
-        target: serverURL,                          // 转发到当前真实 Agent Server
-        changeOrigin: true,                         // 使用目标主机头兼容本地服务
-        rewrite: (path) => path.replace(/^\/api/, ''), // Server 路由本身不包含 /api
-      },
+      '/api': apiProxy,
     },
   },
   preview: {
-    proxy: { '/api': { target: serverURL, changeOrigin: true, rewrite: path => path.replace(/^\/api/, '') } },
+    proxy: { '/api': apiProxy },
   },
 })

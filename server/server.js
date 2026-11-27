@@ -55,6 +55,47 @@ const shouldCompress = request => {
     return /\bgzip\b/i.test(header)
 }
 
+// --- 同源守卫：防 CSRF；无 Origin/Referer 的命令行和 curl 放行 ---
+const parseOrigin = raw => {
+    try {
+        const parsed = new URL(raw)
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+        return { origin: parsed.origin, host: parsed.host }
+    } catch {
+        return null
+    }
+}
+
+const allowedOrigins = () => new Set(
+    String(process.env.AGENT_ALLOWED_ORIGINS || '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean)
+        .map(item => parseOrigin(item)?.origin || item),
+)
+
+const isSameOriginRequest = request => {
+    const originHeader = request.headers.get('origin')
+    const refererHeader = request.headers.get('referer')
+    // 命令行（curl、Go CLI）、直接地址栏访问不带 Origin/Referer，放行
+    if (!originHeader && !refererHeader) return true
+
+    // 优先看 Origin；仅在缺少 Origin 时回退 Referer（Vite dev 代理只改写 Origin）
+    const caller = parseOrigin(originHeader || refererHeader)
+    if (!caller) return false
+
+    const requestHost = request.headers.get('host') || new URL(request.url).host
+    if (caller.host.toLowerCase() === requestHost.toLowerCase()) return true
+
+    return allowedOrigins().has(caller.origin)
+}
+
+app.onBeforeHandle({ as: 'global' }, ({ request, set }) => {
+    if (isSameOriginRequest(request)) return
+    set.status = 403
+    return { error: '跨源请求被拒绝：Origin 与服务 Host 不一致' }
+})
+
 app.onAfterHandle(({ request, response, set }) => {
     // Response 已经是原始对象、SVG 或下载，不再包一次。
     if (response instanceof Response) return response
