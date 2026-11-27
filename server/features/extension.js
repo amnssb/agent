@@ -6,7 +6,7 @@
  *   ~/.agents/extensions/<名字>/manifest.json    用户自己装的，所有项目共用
  *
  * manifest.json 声明这个扩展的身份和入口：
- *   { name?, description?, version?, requires?: ['别的扩展文件夹名'], backend?, frontend? }
+ *   { name?, description?, version?, requires?: ['别的扩展文件夹名'], permissions?: ['tools'], backend?, frontend? }
  * backend 默认 backend.js，导出一个函数，接收 ctx：
  *   export default ctx => {
  *       ctx.patch(Tool, 'build', original => async args => { ... })   // 给框架方法包一层
@@ -103,6 +103,9 @@ const describe = async entry => {
         entry.error = `manifest.json 读取失败：${error.message}`
     }
     entry.requires = Array.isArray(entry.config.requires) ? entry.config.requires.map(String) : []
+    entry.permissions = Array.isArray(entry.config.permissions)
+        ? [...new Set(entry.config.permissions.filter(item => typeof item === 'string').map(item => item.trim()).filter(Boolean))]
+        : []
     entry.hasFrontend = await Bun.file(join(entry.dir, entry.config.frontend || 'frontend/index.js')).exists()
     return entry
 }
@@ -312,6 +315,7 @@ const list = () => {
             running: loaded.has(entry.name),          // 实际是否在生效
             requires: entry.requires,
             dependents: dependents(entry.name),
+            permissions: entry.permissions,
             hasFrontend: entry.hasFrontend,
             changed: changed.has(entry.name),
             error: entry.error || (!disabled.has(entry.name) && !loaded.has(entry.name) ? blocker(entry.name) : ''),

@@ -3,6 +3,7 @@
   "description": "读取 SKILL.md 操作说明，提供 skill 工具和技能设置页",
   "version": "1.1.0",
   "requires": [],
+  "permissions": ["tools", "admin-ops", "session-read", "fs-read", "fs-write", "ui"],
   "backend": "backend.js",
   "frontend": "frontend/index.js",
   "cli": {

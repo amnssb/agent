@@ -308,6 +308,9 @@ describe('后端集成扩展 patch', () => {
                 expect(item.running).toBe(true)
             }
             const byName = Object.fromEntries(state.extensions.map(item => [item.name, item]))
+            expect(byName.monitor.permissions).toEqual(['tools', 'admin-ops', 'session-read', 'fs-read', 'fs-write', 'process'])
+            expect(byName.skill.permissions).toEqual(['tools', 'admin-ops', 'session-read', 'fs-read', 'fs-write', 'ui'])
+            expect(byName.todo.permissions).toEqual(['tools', 'admin-ops', 'session-read', 'ui'])
             expect(byName.monitor.cli.commands.find(c => c.name === 'monitor-stop').params).toEqual(['id', 'sessionId'])
             expect(byName.skill.cli.commands.map(c => c.name)).toEqual(['skills', 'skill-read', 'skill-toggle'])
             expect(byName.todo.cli.topbar).toHaveLength(1)

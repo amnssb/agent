@@ -3,6 +3,7 @@
   "description": "模型更新任务进度，右侧面板显示当前任务和完成情况",
   "version": "1.1.0",
   "requires": [],
+  "permissions": ["tools", "admin-ops", "session-read", "ui"],
   "backend": "backend.js",
   "frontend": "frontend/index.js",
   "cli": {

@@ -34,6 +34,23 @@ export const extensionPanels = ref([])           // 聊天区右侧面板：{ id
 export const extensionTopbarItems = ref([])      // 顶栏图标按钮：{ id, icon, label, active?, onClick }
 export const extensionState = ref({ extensions: [], loaded: [], changed: [] })
 
+// --- manifest.permissions 展示映射：仅作设置页说明，不限制运行时行为 ---
+export const EXTENSION_PERMISSION_LABELS = {
+    tools: '注册工具',
+    'admin-ops': '管理接口',
+    'session-read': '读会话',
+    'fs-read': '读文件',
+    'fs-write': '写文件',
+    process: '后台调度/进程',
+    ui: '界面扩展',
+}
+
+export const permissionLabel = permission => {
+    const key = typeof permission === 'string' ? permission.trim() : ''
+    if (!key) return ''
+    return EXTENSION_PERMISSION_LABELS[key] || key
+}
+
 const owned = new Map()        // 扩展名 → { pages: [], toolViews: [], panels: [], topbarItems: [], styles: [], disposes: [] }
 
 // --- 给一个扩展的 app：注册的东西都记到它名下 ---

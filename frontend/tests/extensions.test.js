@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Extensions } from '../src/features/extensions.js'
+import { Extensions, permissionLabel } from '../src/features/extensions.js'
 import { AgentAPI } from '../src/utils/api.js'
 
 test('frontend extension onDispose runs in reverse order on unload and isolates failures', async t => {
@@ -43,4 +43,17 @@ test('frontend extension onDispose runs in reverse order on unload and isolates 
   } finally {
     delete globalThis.__extTestLog
   }
+})
+
+test('permissionLabel maps known manifest permission keys and falls back to raw text', () => {
+  assert.equal(permissionLabel('tools'), '注册工具')
+  assert.equal(permissionLabel('admin-ops'), '管理接口')
+  assert.equal(permissionLabel('session-read'), '读会话')
+  assert.equal(permissionLabel('fs-read'), '读文件')
+  assert.equal(permissionLabel('fs-write'), '写文件')
+  assert.equal(permissionLabel('process'), '后台调度/进程')
+  assert.equal(permissionLabel('ui'), '界面扩展')
+  assert.equal(permissionLabel(' custom-cap '), 'custom-cap')
+  assert.equal(permissionLabel(''), '')
+  assert.equal(permissionLabel(null), '')
 })

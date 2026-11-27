@@ -26,6 +26,8 @@
 .extension-row__copy strong small { color: var(--la-muted); font-size: 12px; font-weight: 400; }
 .extension-row__copy > small { color: var(--la-muted); font-size: 13px; line-height: 20px; }
 .extension-row__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.extension-row__perms { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.extension-perms-label { color: var(--la-muted); font-size: 12px; line-height: 18px; }
 .extension-row__actions { display: flex; flex: none; align-items: center; gap: 4px; }
 
 .extension-tag {
@@ -41,6 +43,7 @@
 .extension-tag--on { background: color-mix(in srgb, var(--la-accent) 14%, transparent); color: var(--la-accent); }
 .extension-tag--warn { background: color-mix(in srgb, var(--la-warning) 14%, transparent); color: var(--la-warning); }
 .extension-tag--error { background: color-mix(in srgb, var(--la-danger) 12%, transparent); color: var(--la-danger); }
+.extension-tag--perm { background: transparent; border: .5px solid var(--la-line); color: var(--la-muted); }
 
 .extension-empty {
   margin: 0;

@@ -6,6 +6,7 @@
  *   2. 声明的 backend / frontend 入口文件存在
  *   3. cli.commands[].op 在对应 backend 入口源码里真实注册（文本级核对，不执行）
  *   4. requires 声明的依赖扩展在 extensions/ 下真实存在
+ *   5. permissions 为非空字符串数组且与 backend/frontend 入口能力一致（tools / admin-ops / ui）
  *
  * 运行方式：
  *   cd server && bun test tests/manifest.test.js
@@ -63,6 +64,19 @@ describe('扩展 manifest 一致性', () => {
             const requires = Array.isArray(manifest.requires) ? manifest.requires : []
             for (const dep of requires) {
                 expect(extensionSet.has(dep), `${name} 声明了不存在的依赖扩展：${dep}`).toBe(true)
+            }
+
+            // (e) permissions 为非空字符串数组，且内置扩展与实际注册的 tools / admin-ops / ui 一致
+            expect(Array.isArray(manifest.permissions) && manifest.permissions.length > 0, `${name}/manifest.json 应声明 permissions`).toBe(true)
+            const trimmed = manifest.permissions.map(item => typeof item === 'string' ? item.trim() : '')
+            expect(trimmed.every(Boolean), `${name}/manifest.json 的 permissions 不能含空项或非字符串`).toBe(true)
+            expect(new Set(trimmed).size, `${name}/manifest.json 的 permissions 不能重复`).toBe(trimmed.length)
+            const perms = new Set(trimmed)
+            if (manifest.frontend) expect(perms.has('ui'), `${name} 声明了 frontend，permissions 应含 ui`).toBe(true)
+            if (hasBackend) {
+                const backendCode = await backendFile.text()
+                if (backendCode.includes('ctx.op(')) expect(perms.has('admin-ops'), `${name} 注册了 ctx.op，permissions 应含 admin-ops`).toBe(true)
+                if (backendCode.includes('Tool.build')) expect(perms.has('tools'), `${name} 注入了工具，permissions 应含 tools`).toBe(true)
             }
         }
     })

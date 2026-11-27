@@ -3,6 +3,7 @@
   "description": "模型可登记后台条件，条件达成时自动注入通知并唤醒 agent 开辟新一轮回复",
   "version": "1.1.1",
   "requires": [],
+  "permissions": ["tools", "admin-ops", "session-read", "fs-read", "fs-write", "process"],
   "backend": "backend.js",
   "cli": {
     "commands": [

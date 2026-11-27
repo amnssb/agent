@@ -259,7 +259,7 @@ description: 审查改动时用这个
 
 扩展放在 `<项目根>/extensions/<名字>/` 或 `~/.agents/extensions/<名字>/`，一个文件夹一个扩展，`manifest.json` 声明身份和入口；同名时用户目录覆盖项目目录。后端在启动时扫描并启动它们，`Admin.OPS` 之外的能力都由扩展自己 `ctx.patch` / `ctx.op` 挂进来，拔出时逐条恢复。
 
-管理走管理总线，不占冻结路由：`extension.list`、`extension.toggle { name, enabled }`、`extension.reload { name }`。`extension.list` 返回的每一项带 `cli` 字段——manifest 里 `cli` 段的原样透传，由 CLI 按声明把扩展嵌进交互界面和命令行：
+管理走管理总线，不占冻结路由：`extension.list`、`extension.toggle { name, enabled }`、`extension.reload { name }`。`extension.list` 返回的每一项带 `permissions`（manifest 中声明的权限标签数组，仅作设置页展示，不做运行时沙箱隔离）和 `cli` 字段（manifest 里 `cli` 段的原样透传，由 CLI 按声明把扩展嵌进交互界面和命令行）：
 
 ```json
 {

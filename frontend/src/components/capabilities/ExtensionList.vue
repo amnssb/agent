@@ -8,7 +8,7 @@ import { computed, onMounted, ref } from 'vue'
 import Button from '../../ui/Button.vue'
 import Icon from '../../ui/Icon.vue'
 import Switch from '../../ui/Switch.vue'
-import { Extensions, extensionState } from '../../features/extensions.js'
+import { Extensions, extensionState, permissionLabel } from '../../features/extensions.js'
 
 defineProps({ draft: { type: Object, default: null } })
 
@@ -45,7 +45,7 @@ const statusText = item => {
 <template>
   <section class="extension-page" aria-label="扩展">
     <header class="extension-head">
-      <p>扩展放在项目的 extensions/ 或 ~/.agents/extensions/ 里。关闭会立刻拔出它注入的工具、动作和界面；代码改动后点「重载」生效。</p>
+      <p>扩展放在项目的 extensions/ 或 ~/.agents/extensions/ 里。关闭会立刻拔出它注入的工具、动作和界面；代码改动后点「重载」生效。权限标签仅作扩展声明展示，不做运行时沙箱隔离。</p>
     </header>
 
     <p v-if="loading && !items.length" class="extension-empty">正在读取扩展…</p>
@@ -62,6 +62,10 @@ const statusText = item => {
             <span class="extension-tag" :class="{ 'extension-tag--error': item.error, 'extension-tag--on': item.running && !item.error }">{{ statusText(item) }}</span>
             <span v-if="item.changed" class="extension-tag extension-tag--warn">代码有更新</span>
             <span v-for="dep in item.requires" :key="dep" class="extension-tag">依赖 {{ dep }}</span>
+          </span>
+          <span class="extension-row__perms" title="来自 manifest.json 的声明，仅作展示，不做运行时隔离">
+            <span class="extension-perms-label">{{ item.permissions?.length ? '声明权限' : '未声明权限' }}</span>
+            <span v-for="perm in item.permissions || []" :key="perm" class="extension-tag extension-tag--perm">{{ permissionLabel(perm) }}</span>
           </span>
         </span>
         <span class="extension-row__actions">
