@@ -10,6 +10,7 @@
  *   app.toolViews.add(toolName, component) — 自定义某个工具结果的渲染
  *   app.api(op, args)                      — 调 /admin 的 op
  *   app.style(css)                         — 注入扩展样式
+ *   app.onDispose(fn)                      — 卸载或重载扩展时自己收尾（如清定时器/连接）
  * 每个扩展的注册都记在 owned 里，关闭或重载时整体撤掉，不留残余。
  *
  * 调用示例：
@@ -33,11 +34,11 @@ export const extensionPanels = ref([])           // 聊天区右侧面板：{ id
 export const extensionTopbarItems = ref([])      // 顶栏图标按钮：{ id, icon, label, active?, onClick }
 export const extensionState = ref({ extensions: [], loaded: [], changed: [] })
 
-const owned = new Map()        // 扩展名 → { pages: [], toolViews: [], panels: [], topbarItems: [], styles: [] }
+const owned = new Map()        // 扩展名 → { pages: [], toolViews: [], panels: [], topbarItems: [], styles: [], disposes: [] }
 
 // --- 给一个扩展的 app：注册的东西都记到它名下 ---
 const createApp = name => {
-    const mine = { pages: [], toolViews: [], panels: [], topbarItems: [], styles: [] }
+    const mine = { pages: [], toolViews: [], panels: [], topbarItems: [], styles: [], disposes: [] }
     owned.set(name, mine)
     return {
         name,
@@ -79,6 +80,9 @@ const createApp = name => {
             document.head.appendChild(el)
             mine.styles.push(true)
         },
+        onDispose(fn) {
+            if (typeof fn === 'function') mine.disposes.push(fn)
+        },
     }
 }
 
@@ -86,13 +90,26 @@ const createApp = name => {
 const unloadOne = name => {
     const mine = owned.get(name)
     if (mine) {
+        // 逆序执行扩展注册的清理回调；单个扩展清理出错不阻塞其它资源回收
+        for (const fn of [...mine.disposes].reverse()) {
+            try {
+                const res = fn()
+                if (res && typeof res.catch === 'function') {
+                    res.catch(error => console.error(`[extensions] ${name} 前端收尾失败：`, error))
+                }
+            } catch (error) {
+                console.error(`[extensions] ${name} 前端收尾失败：`, error)
+            }
+        }
         extensionSettings.value = extensionSettings.value.filter(p => p.extension !== name)
         extensionPanels.value = extensionPanels.value.filter(p => p.extension !== name)
         extensionTopbarItems.value = extensionTopbarItems.value.filter(i => i.extension !== name)
         for (const toolName of mine.toolViews) delete extensionToolViews[toolName]
         owned.delete(name)
     }
-    document.querySelectorAll(`style[data-extension="${CSS.escape(name)}"]`).forEach(el => el.remove())
+    if (typeof document !== 'undefined') {
+        document.querySelectorAll(`style[data-extension="${CSS.escape(name)}"]`).forEach(el => el.remove())
+    }
 }
 
 // --- 加载一个扩展的前端代码 ---
