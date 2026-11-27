@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 import AgentCore from '@kernel4632/agent-core'
 import Approval from '../features/approval.js'
-import { checkPermission } from './agent-helpers.js'
+import { checkPermission, getAgent } from './agent-helpers.js'
 import Path from '../utils/path.js'
 import Agent from '../features/agent.js'
 import Settings from '../commands/settings.js'
@@ -224,7 +224,7 @@ describe('server MCP', () => {
             expect(Object.keys(mcpTools).length).toBeGreaterThan(0)
 
             const { sessionId } = await Session.create({ title: 'MCP task' })
-            const agent = Agent.runtime().get(sessionId)
+            const agent = await getAgent(sessionId)
             expect(Object.keys(agent.tools.schema)).toEqual(expect.arrayContaining(['everything_echo', 'read_file']))
 
             await Mcp.close()
@@ -749,7 +749,7 @@ describe('server Agent integration boundary', () => {
         await withHome(async () => {
             await Settings.set({ providers: [{ name: 'local', models: [{ id: 'model', name: 'model' }] }] })
             const { sessionId } = await Session.create({ title: 'Tool scan' })
-            const agent = Agent.runtime().get(sessionId)
+            const agent = await getAgent(sessionId)
             expect(Object.keys(agent.tools.schema)).toEqual(expect.arrayContaining([
                 'read_file', 'write_file', 'find_files', 'search_text', 'edit',
                 'move_file', 'copy_file',

@@ -165,7 +165,10 @@ describe('运行标记', () => {
             const meta = await Bun.file(join(Path.root(), 'sessions', sessionId, 'meta.json')).json()
             expect(meta.running).toBeUndefined()
             expect(events).toContain('恢复时模型请求失败')
-            expect(History.get({ sessionId }).map(message => message.id)).toEqual(['a1'])
+            const history = History.get({ sessionId })
+            expect(history).toHaveLength(2)
+            expect(history[0].id).toBe('a1')
+            expect(history[1].role).toBe('error')
         })
     })
 
@@ -337,7 +340,10 @@ describe('重启恢复', () => {
 
             const meta = await Bun.file(join(Path.root(), 'sessions', sessionId, 'meta.json')).json()
             expect(meta.running).toBeUndefined()
-            expect(History.get({ sessionId }).map(message => message.id)).toEqual(['a1'])
+            const history = History.get({ sessionId })
+            expect(history).toHaveLength(2)
+            expect(history[0].id).toBe('a1')
+            expect(history[1].role).toBe('error')
         })
     })
 

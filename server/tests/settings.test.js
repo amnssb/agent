@@ -17,6 +17,7 @@ import Approval from '../features/approval.js'
 import Settings from '../commands/settings.js'
 import History from '../features/history.js'
 import Session from '../commands/session.js'
+import { getAgent } from './agent-helpers.js'
 import store from '../store.js'
 import Title from '../features/title.js'
 import { app } from '../server.js'
@@ -46,7 +47,7 @@ const newSession = async ({ title = '设置测试', extra = {} } = {}) => {
     return sessionId
 }
 
-const toolNames = sessionId => Object.keys(Agent.runtime().get(sessionId).tools.schema).sort()
+const toolNames = async sessionId => Object.keys((await getAgent(sessionId)).tools.schema).sort()
 
 
 describe('会话运行设置', () => {
@@ -66,7 +67,7 @@ describe('会话运行设置', () => {
         await withHome(async () => {
             const sessionId = await newSession()
             expect((await Session.patch({ sessionId, reasoning: 'high' })).reasoning).toBe('high')
-            expect(Agent.runtime().get(sessionId).config.provider.body.reasoning_effort).toBe('high')
+            expect((await getAgent(sessionId)).config.provider.body.reasoning_effort).toBe('high')
             expect((await Session.patch({ sessionId, reasoning: 'ultra' })).reasoning).toBe('high')
         })
     })
@@ -74,7 +75,7 @@ describe('会话运行设置', () => {
     test('运行中调整思考强度不重建 Agent，下一轮直接生效', async () => {
         await withHome(async () => {
             const sessionId = await newSession()
-            const agent = Agent.runtime().get(sessionId)
+            const agent = await getAgent(sessionId)
             agent.running = true
             await Session.patch({ sessionId, reasoning: 'high' })
             expect(Agent.runtime().get(sessionId)).toBe(agent)
@@ -86,7 +87,7 @@ describe('会话运行设置', () => {
     test('主 Agent 使用全部工具，不按角色裁剪', async () => {
         await withHome(async () => {
             const sessionId = await newSession()
-            const names = toolNames(sessionId)
+            const names = await toolNames(sessionId)
             expect(names).toContain('write_file')
             expect(names).toContain('execute_command')
             expect(names).toContain('find_files')
@@ -137,7 +138,7 @@ describe('哪件事用哪个模型', () => {
                 models: { compact: { provider: 'cheap', model: '小模型' } },
             })
             const { sessionId } = await Session.create({ title: '分开配模型' })
-            const { config } = Agent.runtime().get(sessionId)
+            const { config } = await getAgent(sessionId)
             expect(config.compact.model).toBe('小模型')
             expect(config.compact.system).toBeUndefined()
             expect(config.compact.maxContextTokens).toBeUndefined()
@@ -196,7 +197,7 @@ describe('压缩阈值', () => {
         await withHome(async () => {
             await Settings.set({ providers: [{ name: 'local', models: [{ id: 'model', name: 'model' }] }], compact: { threshold: 0.6 } })
             const { sessionId } = await Session.create({ title: '阈值' })
-            expect(Agent.runtime().get(sessionId).config.compactThreshold).toBe(0.6)
+            expect((await getAgent(sessionId)).config.compactThreshold).toBe(0.6)
 
             await Settings.set({ providers: [{ name: 'local', models: [{ id: 'model', name: 'model' }] }], compact: { threshold: 1.5 } })
             History.clear()
@@ -250,7 +251,7 @@ describe('会话模型切换', () => {
             expect(meta.provider).toBe('other')
             expect(meta.model).toBe('third')
             expect((await Session.read({ sessionId })).model).toBe('third')
-            expect(Agent.runtime().get(sessionId).config.model).toBe('third')
+            expect((await getAgent(sessionId)).config.model).toBe('third')
         })
     })
 
@@ -267,7 +268,7 @@ describe('会话模型切换', () => {
             const sessionId = await newSession({
                 extra: { providers: [{ name: 'local', models: [{ id: 'model', name: 'model' }, { id: 'other', name: 'other' }] }] },
             })
-            const agent = Agent.runtime().get(sessionId)
+            const agent = await getAgent(sessionId)
             agent.running = true
             const meta = await Session.model({ sessionId, provider: 'local', model: 'other' })
             expect(meta.model).toBe('other')
@@ -332,7 +333,7 @@ describe('会话分支', () => {
             const sessionId = await newSession()
             await History.add({ sessionId, message: AgentCore.history.user({ content: '第一句' }) })
             await History.save(sessionId)
-            const agent = Agent.runtime().get(sessionId)
+            const agent = await getAgent(sessionId)
             agent.running = true
 
             const { sessionId: branchId } = await Session.fork({ sessionId })

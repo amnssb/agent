@@ -15,6 +15,7 @@ import Agent from '../features/agent.js'
 import Path from '../utils/path.js'
 import Settings from '../commands/settings.js'
 import Session from '../commands/session.js'
+import { getAgent } from './agent-helpers.js'
 import History from '../features/history.js'
 import store from '../store.js'
 
@@ -61,7 +62,7 @@ describe('onPermission 的返回值', () => {
             await Settings.set({ providers: [{ name: 'local', models: [{ id: 'model', name: 'model' }] }], permission: { '*': 'allow' } })
             const { sessionId } = await Session.create({ title: '审批返回值' })
 
-            const callbacks = Agent.runtime().get(sessionId).callbacks
+            const callbacks = (await getAgent(sessionId)).callbacks
             const allowed = await callbacks.onPermission({ sessionId, toolCallId: 'c1', toolName: 'read_file', input: { path: 'D:/app/a.js' } })
             expect(typeof allowed).toBe('boolean')
             expect(allowed).toBe(true)
@@ -72,7 +73,7 @@ describe('onPermission 的返回值', () => {
         await withHome(async () => {
             await Settings.set({ providers: [{ name: 'local', models: [{ id: 'model', name: 'model' }] }], permission: { '*': 'deny' } })
             const { sessionId } = await Session.create({ title: '拒绝读取' })
-            const callbacks = Agent.runtime().get(sessionId).callbacks
+            const callbacks = (await getAgent(sessionId)).callbacks
 
             const allowed = await callbacks.onPermission({ sessionId, toolCallId: 'c2', toolName: 'read_file', input: { path: 'D:/app/a.js' } })
             expect(allowed).toBe(false)
