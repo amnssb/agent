@@ -641,6 +641,8 @@ function applyCompactDelta(session, event) {
   step.request[field] = (step.request[field] || '') + (event.text || '')
 }
 
+const MESSAGE_EVENTS = new Set(['subagent-tool', 'subagent-tool-result'])
+
 function receiveMessage(session, event) {
   if (event.type === 'text-delta' || event.type === 'reasoning-delta') {
     applyMessageDelta(session, event)
@@ -753,7 +755,12 @@ async function receive(sessionID, event) {
   }
   if (TOOL_EVENTS.has(event.type)) receiveTool(session, event)
   else if (RUN_EVENTS.has(event.type)) await receiveRun(sessionID, session, event)
-  else receiveMessage(session, event)                    // 正文增量；不认识的事件自然忽略
+  else if (MESSAGE_EVENTS.has(event.type)) receiveMessage(session, event)
+  else {
+    // core 升级或协议漂移时在开发期立刻暴露未知事件，生产环境保持静默。
+    if (import.meta.env && import.meta.env.DEV) console.warn('未知事件', event.type)
+    receiveMessage(session, event)
+  }
   History.syncSummary(store.sessions[sessionID])
 }
 
