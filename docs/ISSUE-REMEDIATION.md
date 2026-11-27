@@ -84,6 +84,75 @@
 | 缓 | #102 ask-user 结构化 | 等 ask_followup_question 的真实使用反馈 |
 | 缓 | #106-108/112 | 与单机自用定位冲突，deferred |
 
+## 三之二、下一批执行规划（2026-11-27 复核落点后细化）
+
+前提核实（全部基于当前树，a62db65e..bc9c6f1d 之后）：`/admin` op 表可随功能扩展不受路由冻结限制；`META_FIELDS`（features/history.js:31）是 meta.json 的唯一形状来源；monitor 引擎已有 `repeat`/`rounds`/`pending_wake`/TTL 完整唤醒语义，缺的只是 cron 条件插件和启动时全量恢复；前端扩展已有 `app.onDispose`（P1-3）可承载通知/定时器的清理；`ctx_usage` 的数字来自 `ContextUsage`（agent-core onInject 回调的实测值，重启即清）。
+
+### C-1 #94 上下文检查器（先做：纯读、零协议风险、调试利器）
+
+原则：只装配数据，不发明新数据源。所有成分都有现成来源，检查器只是把它们并排摆出来。
+
+- 后端：`server/utils/context-inspect.js` 新增 `inspect({ sessionId })`，返回一份只读装配对象：
+  - `system`：`Context.system({ config: store.config, cwd })`（用户提示词 + 项目规则，含来源标注哪段来自 AGENTS.md/CLAUDE.md）
+  - `tools`：`(await Tool.build({ sessionId })).tools` 的 name/description/inputSchema/permission（与真实发送一致，复用 getAgent 的装配；不重新发明第二份装配）
+  - `messages`：`History.get({ sessionId })` 尾部 N 条（每条只给 role/字节量/是否 compact 摘要，正文默认折叠，防止检查器本身撑爆上下文）
+  - `estimate`：`Agent.estimateContext({ history, system, budget, ratio })` 的结果 + `ContextUsage.read(sessionId)` 的实测值并排——估算 vs 实测的差值正是压缩调参要看的
+  - `keep`：`store.config.contextKeep` 当前生效值
+- 注册为 `/admin` op：`'context.inspect': inspect`（加 op 不加路由；manifest.test 的 `ctx.op → admin-ops` 反向校验自然覆盖）
+- 前端：设置页新分类「上下文检查」（只读面板，无保存按钮），monospace 展示 system 全文 + 工具表 + 消息尾部统计；工具行内嵌 description 折叠。
+- 测试：`server/tests/context-inspect.test.js`——空会话 / 带项目规则目录 / 压缩过（firstTurns 生效后 messages 标注）/ estimate 与 ContextUsage 并排。断言只碰形状与来源标注，不锁 token 数。
+- 版本：server 0.108.0 / frontend 0.146.0（新能力）。验收：两个版本号文件 + 新测试 + `bun test` + 前端 `bun run test`、`bun run build`。
+
+### C-2 #95 pin 上下文（第二批：动发送链路，一次只改一层）
+
+设计决策（定死，避免实现时漂移）：
+- pin 的是**内容**不是消息 ID：pin 时立即把内容快照进 meta.json 的新字段 `pinned`（数组，每项 `{ id, text, kind: 'message'|'file'|'note', createdAt }`）。理由：压缩/回退后消息 ID 可能失效；meta.json 已有 `META_FIELDS` 单一形状来源（features/history.js:31），加字段是既有惯例（temporary、running 都是这么进的）。
+- 注入点：`Context.system()` 尾部追加「## Pinned context」段——走 system 而不是消息注入，天然跨压缩存活、对 core 零改动。
+- 上限：pin 总量 32KB，超限拒绝并提示（防止把整个仓库 pin 进去）。
+- API 全走现有路由：pin 的增删查是管理动作 → `/admin` op（`pin.list` / `pin.add` / `pin.remove`）；这样 `POST /agent/send` 请求体不用动，路由冻结不破。
+- 前端：消息行 hover 出「固定」按钮（TurnItem）；输入框上方 pin 条（可删）；Composer 发送时对 pinned 只读展示。
+- 测试：pin 后 `GET /session/settings` 可见 pinned 字段；`context.inspect` 的 system 段包含 pinned 文本；回退/压缩后 pinned 仍在；32KB 上限拒绝。
+- 版本：server 0.109.0 / frontend 0.147.0。
+- 风险点：meta.json 是每会话一份、pin 属于会话级——fork 会话时 pinned 跟着走（fork 已拷 meta.json，天然继承，无需特殊处理，测试里锁一条断言）。
+
+### C-3 #101 定时任务（第三批：只加条件插件 + 启动恢复，不碰引擎语义）
+
+monitor 引擎的唤醒语义（repeat/rounds/pending_wake/TTL/熔断）已全部就绪，本批不重构引擎：
+- 新条件插件 `extensions/monitor/conditions/cron.js`：kind `cron`，字段 `{ kind: 'cron', expression: '5 9 * * *' }`。解析用零依赖自写（分钟/小时/日/月/星期五段，支持 `*`、逗号、步进 `*/n`；不引 croner 之类的第三方，extensions 无 node_modules）。`normalize` 校验 + `start` 算出 `nextAt` + `check` 到点返回命中（命中后引擎照常走唤醒/注入）。
+- repeat 语义确认：cron 条件必须 `repeat: true`（否则第一次触发后 done）；引擎现有 repeat 字段直接支持，无需改。
+- 启动时全量恢复：`MonitorEngine.loadSession` 目前只在 `Tool.build` 装配时按会话懒恢复——**服务重启后没人调用过 loadSession 的会话的监控不活**。改法：`Extension.load` 后扫 `Path.sessions()` 下所有 monitors.json 逐会话 loadSession（一次启动成本，几毫秒/会话）。这是本批唯一动 engine.js 的地方，也是真正的 bug 修复（服务器重启后定时任务全部失联）。
+- 新 CLI 命令（manifest cli.commands）：`monitor-arm`（`usage: cron表达式 目标 [会话ID]`），复用现有 op/params 声明模式。
+- 测试：cron 表达式解析矩阵（合法/非法/边界：2 月 30 日类语义不做校验，按 cron 惯例交由永远不匹配）；重启恢复（写 monitors.json → 新进程 loadAll → status 正确）；cron 命中触发一轮唤醒。
+- 版本：server 0.109.1（监控恢复是 fix，跟批次走第二位也行，取 0.110.0 一并）。定：monitor 扩展 manifest version 1.2.0，server 0.110.0。
+
+### C-4 notify 移植（#111 思路，第四批：纯前端扩展，零后端改动）
+
+上游 6a1c64c 的 notify 思路 + 本仓库已具备的载体：
+- 新扩展 `extensions/notify/`：manifest（permissions: ['ui']，无 backend——纯前端扩展，manifest.test 的 backend 键为可选已覆盖）+ `frontend/index.js`。
+- 实现：订阅 `store.sessions[*].status` 变化（watch）——running → idle/error 时若 `document.visibilityState === 'hidden'` 发 Notification（`app.onDispose` 里 close 所有通知 + 解除 watch，P1-3 的 API 第一个真实消费者）；权限请求在页面后台时同样弹（监听 permission 事件的 SSE 已有，前端 store 已收）。
+- 首次启用请求 `Notification.requestPermission()`；被拒绝时设置页展示状态而不是静默失效。
+- 设置页分类「通知」：开关 + 测试按钮。
+- 测试：`frontend/tests/` 加 notify 单测（mock Notification + visibilityState，断言后台才弹、前台静默、onDispose 清干净）。
+- 版本：frontend 0.147.1（或并入 C-2 的 0.147.0 一起发，看提交顺序；单独发则 frontend 0.148.0，新扩展算新能力）。
+
+### 批次顺序与依赖
+
+```mermaid
+graph LR
+    C1[C-1 #94 上下文检查器] --> C2[C-2 #95 pin]
+    C2 --> C3[C-3 #101 cron + 重启恢复]
+    C1 --> C4[C-4 notify]
+    C2 -.->|inspect 可验证 pin 注入| C1
+```
+
+C-1 先行：它是纯读面板，且 C-2 的「pin 进 system」最方便的验证手段就是 inspect 面板。C-3 与 C-4 互相独立，C-4 依赖的 `app.onDispose` 已就绪，可在 C-2 之后并行提交。每步照旧：改版本号 → 对应一半验证 → 提交推送；`bun test` 全量后台跑。
+
+### 明确不做（本批重申）
+
+- #91 终端/PTY、#93 长期记忆：数据模型/改动面大，等本批收口后单独立项。
+- #105 市场、#118 技能 registry：等 core/生态，文档已标 deferred。
+- C-3 不做 cron 的时区支持（跟宿主本地时间）；C-2 不做 pin 的拖拽排序（数组顺序即展示顺序，够用）。
+
 ## 四、明确不做
 
 - 不新增路由（19 条冻结；P0-2 守卫是中间件）。
