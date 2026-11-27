@@ -206,7 +206,7 @@ app.group('/session', session => session
 app.group('/sse', sse => sse
     .get('/connect/:sessionId', ({ params, request }) => SSE.connect({ id: params.sessionId, request })))
 
-const start = async ({ port = process.env.PORT || 3000 } = {}) => {
+const start = async ({ port = process.env.PORT || 3000, hostname = process.env.HOST || '127.0.0.1' } = {}) => {
     await Storage.prepare()   // 先确定 sessions/ 的位置，再做任何会话读写
     await History.prepare()   // 数据目录先建好，后面所有读写都不用再判断目录在不在。
     await Settings.read()     // 权限规则和模型配置读一次即可。
@@ -220,7 +220,7 @@ const start = async ({ port = process.env.PORT || 3000 } = {}) => {
     process.on('SIGINT', () => { cleanup(); process.exit(0) })
     process.on('SIGTERM', () => { cleanup(); process.exit(0) })
 
-    const server = app.listen(port)
+    const server = app.listen({ port, hostname })
 
     // 重启后自动接住被打断的任务：等端口开始服务后再恢复，恢复期间的请求不会撞上半初始化状态。
     // 续跑是异步的，不挡启动；单条会话失败由 recover 自己记日志。
@@ -233,5 +233,6 @@ export { app, start }
 
 if (import.meta.main) {
     const port = process.env.PORT || 3000
-    start({ port }).then(() => console.log(`Agent server listening on http://localhost:${port}`))
+    const hostname = process.env.HOST || '127.0.0.1'
+    start({ port, hostname }).then(() => console.log(`Agent server listening on http://${hostname}:${port}`))
 }

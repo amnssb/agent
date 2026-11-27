@@ -7,7 +7,12 @@
  */
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { app } from '../server.js'
+import { mkdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import Extension from '../features/extension.js'
+import Path from '../utils/path.js'
+import { app, start } from '../server.js'
 
 const previousAllowed = process.env.AGENT_ALLOWED_ORIGINS
 afterEach(() => {
@@ -122,5 +127,27 @@ describe('同源守卫', () => {
             headers: { origin: 'https://other.example.com' },
         }))
         expect(denied.status).toBe(403)
+    })
+
+    test('start() 默认仅监听 127.0.0.1，避免全接口暴露引发 DNS rebinding 风险', async () => {
+        const home = join(tmpdir(), `agent-listen-${crypto.randomUUID()}`)
+        const previousHome = process.env.AGENT_HOME
+        await mkdir(home, { recursive: true })
+        process.env.AGENT_HOME = home
+        Path.lock(home)
+        let started
+        try {
+            started = await start({ port: 0 })
+            expect(started.server.hostname).toBe('127.0.0.1')
+        } finally {
+            await Extension.toggle({ name: 'monitor', enabled: false }).catch(() => {})
+            await Extension.toggle({ name: 'skill', enabled: false }).catch(() => {})
+            await Extension.toggle({ name: 'todo', enabled: false }).catch(() => {})
+            await started?.stop(true)
+            Path.unlock()
+            if (previousHome === undefined) delete process.env.AGENT_HOME
+            else process.env.AGENT_HOME = previousHome
+            await rm(home, { recursive: true, force: true })
+        }
     })
 })
