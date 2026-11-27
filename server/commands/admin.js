@@ -17,6 +17,7 @@
  */
 
 import Extension from '../features/extension.js'
+import Agent from '../features/agent.js'
 import Approval from '../features/approval.js'
 import Config from '../features/config.js'
 import Context from '../features/context.js'

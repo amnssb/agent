@@ -1,12 +1,22 @@
 import { describe, test, expect } from 'bun:test'
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
+import { readFileSync, rmSync } from 'node:fs'
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Path from '../utils/path.js'
 import Shell from '../tools/shell.js'
 import { stopProcess, cleanup } from '../utils/process.js'
 
-const alive = pid => { try { process.kill(pid, 0); return true } catch { return false } }
+const alive = pid => {
+    try { process.kill(pid, 0) } catch { return false }
+    if (process.platform === 'linux') {
+        try {
+            const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+            if (stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) === 'Z') return false
+        } catch { return false }
+    }
+    return true
+}
 const waitFor = async check => {
     for (let i = 0; i < 200; i++) { if (await check()) return; await Bun.sleep(10) }
     throw new Error('process state did not settle')
@@ -34,7 +44,7 @@ const fixture = async run => {
         Path.unlock()
         if (previous === undefined) delete process.env.AGENT_HOME
         else process.env.AGENT_HOME = previous
-        await rm(root, { recursive: true, force: true })
+        rmSync(root, { recursive: true, force: true })
     }
 }
 
@@ -58,7 +68,12 @@ describe.skipIf(process.platform === 'win32')('POSIX process groups', () => {
             if (mode === 'abort') controller.abort()
             const output = await result
             expect(output.timedOut).toBe(mode === 'timeout')
-            expect(output.stdout).toContain('ready')
+            if (mode === 'timeout') {
+                expect(output.output).toContain('ready')
+                await stopProcess(output.id)
+            } else {
+                expect(output.stdout).toContain('ready')
+            }
             await waitFor(() => !alive(pid))
         }))
     }

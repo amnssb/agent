@@ -8,6 +8,7 @@
  * 运行：cd server && bun test tests/extended-tools.test.js
  */
 import { afterEach, describe, expect, test } from 'bun:test'
+import { rmSync, readFileSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -48,9 +49,21 @@ const writeScript = async (name, code) => {
     return file
 }
 
+const isAlive = pid => {
+    try { process.kill(pid, 0) } catch { return false }
+    if (process.platform === 'linux') {
+        try {
+            const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+            const state = stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3)
+            if (state === 'Z') return false                // 容器 PID 1 未回收僵尸时，Z 态即已终止
+        } catch { return false }
+    }
+    return true
+}
+
 afterEach(async () => {
     cleanup()                                            // 每个测试结束后带走还挂着的后台进程
-    await Promise.all(homes.splice(0).map(root => rm(root, { recursive: true, force: true })))
+    for (const root of homes.splice(0)) rmSync(root, { recursive: true, force: true })  // 避开 Bun 1.4.4 异步 rm 的 EFAULT 竞态
 })
 
 describe('read_file 大文件分段', () => {
@@ -138,7 +151,7 @@ describe('background 后台进程', () => {
             expect(exit).toBe(0)
             expect(err).not.toContain('TypeError')
             const task = JSON.parse(out.trim().split(String.fromCharCode(10)).at(-1))
-            expect(() => process.kill(task.pid, 0)).toThrow()
+            expect(isAlive(task.pid)).toBe(false)
         })
     }, 30000)
 
@@ -325,7 +338,8 @@ describe('execute_command 的 background 参数', () => {
         expect(literal.stdout.trim()).toBe('a | b')
 
         // 真管道必须走 shell，否则整条命令就不是一个程序了
-        const piped = await shell.execute({ command: 'echo hello | findstr hello' }, {})
+        const grepCmd = process.platform === 'win32' ? 'findstr hello' : 'grep hello'
+        const piped = await shell.execute({ command: `echo hello | ${grepCmd}` }, {})
         expect(piped.exitCode).toBe(0)
         expect(piped.stdout).toContain('hello')
         await rm(script, { force: true })
