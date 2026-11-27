@@ -85,7 +85,7 @@ const withHome = async callback => {
     }
 }
 
-// 技能测试已迁移到 extensions/skill/
+// 技能测试见 tests/skill-extension.test.js
 
 const writeJson = async (path, value) => {
     await mkdir(dirname(path), { recursive: true })
