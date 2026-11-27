@@ -26,6 +26,7 @@ import Compact from '../features/compact.js'
 import Context from '../features/context.js'
 import History from '../features/history.js'
 import Mcp from '../features/mcp.js'
+import Review from '../features/review.js'
 import ContextUsage from '../utils/context-usage.js'
 import ContextRatios from '../utils/context-ratios.js'
 import Rollback from '../features/rollback.js'
@@ -38,12 +39,19 @@ import TempWorkspace from '../utils/temp-workspace.js'
 import fail from '../utils/fail.js'
 import usageOf from '../utils/usage.js'
 
+const reviewTool = params => Review.check({
+    ...params,
+    resolveModel: () => Agent.model('review'),
+    resolveConnection: target => Agent.connection(target),
+})
+
 // --- 工具执行前的审批关口：审批不持有工具表，工具参数由这里递给它 ---
 const checkPermission = params => Approval.check({
     ...params,
     snapshot: Tool.snapshot,
     ready: Tool.ready,
     kindOf: Tool.kind,
+    review: reviewTool,
 })
 
 // --- 装配一条会话的 Agent 要用的全部材料 ---

@@ -20,6 +20,7 @@ import ModelSettings from '../components/providers/ModelSettings.vue'
 import ProviderList from '../components/providers/ProviderList.vue'
 import PromptSettings from '../components/preferences/PromptSettings.vue'
 import DataSettings from '../components/preferences/DataSettings.vue'
+import ReviewSettings from '../components/capabilities/ReviewSettings.vue'
 import MCPList from '../components/capabilities/MCPList.vue'
 import ExtensionList from '../components/capabilities/ExtensionList.vue'
 
@@ -32,6 +33,9 @@ const settingsPages = [
   { id: 'model', label: '模型', description: '默认模型和任务分工', icon: 'spark', group: '模型与服务', tone: 'primary', component: ModelSettings },
   { id: 'context', label: '上下文', description: '自动压缩阈值、保留原文和上下文用量', icon: 'stats', group: '模型与服务', tone: 'tertiary', component: ContextSettings },
   { id: 'prompts', label: '系统提示词', description: '设置全局助手行为和回复风格', icon: 'document', group: '模型与服务', tone: 'tertiary', component: PromptSettings },
+  { id: 'review', label: '自动审核', description: '用模型审核工具调用，决定放行、拒绝或交给你确认', icon: 'permission', group: '模型与服务', tone: 'secondary', component: ReviewSettings },
+  // 工具权限不在这里：它是「发这条消息时要不要拦」的判断，
+  // 放在对话框输入区（ComposerTools），干活时不用离开当前上下文去翻设置。
   // 技能页由 skill 扩展注入，不在框架里硬编码
   { id: 'mcp', label: 'MCP 服务', description: '连接外部工具和数据服务', icon: 'link', group: '模型与服务', tone: 'tertiary', component: MCPList, nested: true },
   { id: 'extensions', label: '扩展', description: '开关、重载扩展，查看依赖和加载状态', icon: 'grid-plus', group: '模型与服务', tone: 'tertiary', component: ExtensionList },

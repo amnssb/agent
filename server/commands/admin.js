@@ -25,6 +25,7 @@ import Discover from '../features/discover.js'
 import Filesystem from '../features/filesystem.js'
 import Mcp from '../features/mcp.js'
 import ModelIcons from '../features/model-icons.js'
+import Review from '../features/review.js'
 import SessionGroups from '../features/session-groups.js'
 import Storage from '../features/storage.js'
 import Tool from '../features/tool.js'
@@ -84,10 +85,16 @@ const mcpImport = async ({ ids, cwd } = {}) => {
 const mcpRemove = async ({ name } = {}) => { const result = await Mcp.remove({ name }); await Config.save(); return result }
 const mcpToggle = async ({ name, enabled } = {}) => { const result = await Mcp.toggle({ name, enabled }); await Config.save(); return result }
 
+const reviewTool = params => Review.check({
+    ...params,
+    resolveModel: () => Agent.model('review'),
+    resolveConnection: target => Agent.connection(target),
+})
+
 // --- 配置整体替换后要重新评估挂着的审批 ---
-const setConfig = async config => { const result = await Config.set(config); Approval.recheck(); return result }
-const restoreConfig = async ({ id } = {}) => { const result = await Config.restore({ id }); Approval.recheck(); return result }
-const importConfig = async ({ config } = {}) => { const result = await Config.import({ config }); Approval.recheck(); return result }
+const setConfig = async config => { const result = await Config.set(config); Approval.recheck({ review: reviewTool }); return result }
+const restoreConfig = async ({ id } = {}) => { const result = await Config.restore({ id }); Approval.recheck({ review: reviewTool }); return result }
+const importConfig = async ({ config } = {}) => { const result = await Config.import({ config }); Approval.recheck({ review: reviewTool }); return result }
 
 const OPS = {
     // --- 配置 ---

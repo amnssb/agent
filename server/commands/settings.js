@@ -19,7 +19,14 @@ import Agent from '../features/agent.js'
 import Approval from '../features/approval.js'
 import Config from '../features/config.js'
 import Context from '../features/context.js'
+import Review from '../features/review.js'
 import Tool from '../features/tool.js'
+
+const reviewTool = params => Review.check({
+    ...params,
+    resolveModel: () => Agent.model('review'),
+    resolveConnection: target => Agent.connection(target),
+})
 
 const packageFile = fileURLToPath(new URL('../package.json', import.meta.url))
 // 进程启动时读一次版本并固定下来；之后 package.json 再变，health 才能对比出“代码已更新但进程未重启”。
@@ -29,7 +36,7 @@ let cachedVersion = runtimeVersion || null
 // --- 配置读写与界面元数据 ---
 // set/restore/importConfig 改完配置后要重评挂着的审批，旧规则下卡住的调用按新规则走。
 const { MODELS, read, get, meta } = Config
-const set = async config => { const result = await Config.set(config); Approval.recheck(); return result }
+const set = async config => { const result = await Config.set(config); Approval.recheck({ review: reviewTool }); return result }
 
 // --- 工具目录：设置页画权限开关用 ---
 const tools = () => Tool.list()
@@ -40,9 +47,9 @@ const test = async ({ provider, model } = {}) => Agent.test({ provider, model, c
 
 const backups = () => Config.backups()
 const backup = id => Config.backup(id)
-const save = async body => { const result = await Config.restore(body); Approval.recheck(); return result }
+const save = async body => { const result = await Config.restore(body); Approval.recheck({ review: reviewTool }); return result }
 const exportConfig = query => Config.export(query)
-const importConfig = async body => { const result = await Config.import(body); Approval.recheck(); return result }
+const importConfig = async body => { const result = await Config.import(body); Approval.recheck({ review: reviewTool }); return result }
 
 // --- 读取后端版本：运行版本在进程启动时固定，目标版本每次读仓库文件 ---
 const version = async () => {

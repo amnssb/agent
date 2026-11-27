@@ -15,7 +15,14 @@ import Approval from '../features/approval.js'
 import Context from '../features/context.js'
 import History from '../features/history.js'
 import Mcp from '../features/mcp.js'
+import Review from '../features/review.js'
 import Tool from '../features/tool.js'
+
+const reviewTool = params => Review.check({
+    ...params,
+    resolveModel: () => Agent.model('review'),
+    resolveConnection: target => Agent.connection(target),
+})
 
 // --- 审批关口：快照、扫描和类别查询由这里递给审批 ---
 const checkPermission = params => Approval.check({
@@ -23,6 +30,7 @@ const checkPermission = params => Approval.check({
     snapshot: Tool.snapshot,        // 放行时让工具自己决定存不存快照
     ready: Tool.ready,              // 工具表没扫描过时先补一次
     kindOf: Tool.kind,            // 查这个工具属于哪一类
+    review: reviewTool,
 })
 
 // --- 装配一条会话的 Agent 要用的全部材料 ---

@@ -19,6 +19,7 @@ import Approval from '../features/approval.js'
 import Context from '../features/context.js'
 import History from '../features/history.js'
 import Mcp from '../features/mcp.js'
+import Review from '../features/review.js'
 import Title from '../features/title.js'
 import Tool from '../features/tool.js'
 import ToolTiming from '../features/tool-timing.js'
@@ -28,12 +29,19 @@ import usageOf from '../utils/usage.js'
 import ContextUsage from '../utils/context-usage.js'
 import ContextRatios from '../utils/context-ratios.js'
 
+const reviewTool = params => Review.check({
+    ...params,
+    resolveModel: () => Agent.model('review'),
+    resolveConnection: target => Agent.connection(target),
+})
+
 // --- 工具执行前的审批关口：审批不持有工具表，工具参数由这里递给它 ---
 const checkPermission = params => Approval.check({
     ...params,
     snapshot: Tool.snapshot,
     ready: Tool.ready,
     kindOf: Tool.kind,
+    review: reviewTool,
 })
 
 // --- 取回缓存的 Agent，没有或已过期就按最新材料装配 ---

@@ -126,18 +126,20 @@ Agent 循环来自 `@kernel4632/agent-core`（[仓库](https://github.com/kernel
     "chat": { "provider": "default", "model": "your-model" },
     "compact": { "provider": "", "model": "" },
     "title": { "provider": "", "model": "" },
-    "task": { "provider": "", "model": "" }
+    "task": { "provider": "", "model": "" },
+    "review": { "provider": "", "model": "" }
   },
   "compact": { "threshold": 0.8 },
   "contextKeep": { "firstTurns": 3, "recentTurns": 3, "firstShare": 0.2, "recentShare": 0.3 },
   "retry": { "maxTries": null },
-  "permission": { "*": "ask" }
+  "permission": { "*": "ask" },
+  "review": { "enabled": false, "policy": "", "timeout": 15000 }
 }
 ```
 
 - 每个模型自己带 `context` 和 `capabilities`，没有全局能力表。`family` 可选，只用于模型图标；留空时由 models.dev 目录和模型 ID 自动判断，歧义时不猜。
 - `maxOutput`、`temperature`、`topP`、`seed` 是可选生成参数；`maxOutput` 映射到 agent-core 的单次最大输出，其余原样交给 AI SDK。`body` 用来覆盖请求体里没有可视化字段的高级参数，例如 `{ "top_k": 20 }`。
-- `models` 按任务分开：`chat` 是会话默认模型；`compact`、`title`、`task` 不填就回退到 `chat`。
+- `models` 按任务分开：`chat` 是会话默认模型；`compact`、`title`、`task`、`review` 不填就回退到 `chat`。
 - `compact.threshold` 是自动压缩的触发比例。`contextKeep` 决定压缩后还留多少总结之前的原文：`firstTurns` 是开场最多保留几个用户回合（**填 0 就是压缩后不再带上最初那几轮原始对话**，只用总结 + 最近的现场），`recentTurns` 是总结之前最多保留几个回合，两个 `*Share` 分别是这两段最多占多少上下文预算。轮数写 0 就是 0，不会被当成“没填”退回默认值；本次发送的用户输入永远保留。
 - 配置只认当前形状；旧字段不迁移，直接忽略。
 - 模型请求失败沿用 agent-core 的重试：取消和上下文超长除外，默认无限次指数退避；`retry.maxTries` 缺省或 `null` 为无限，正整数为最多重试次数，`0` 为不重试。
@@ -383,7 +385,9 @@ bun start
 
 ### SSE 事件
 
-`GET /sse/connect/{sessionId}` 推的事件类型：`agent-start`、`agent-resume`、`agent-finish`、`text-delta`、`reasoning-delta`、`retry`、`llm-start`、`llm-first-token`、`llm-finish`、`tool-call`、`tool-output`、`tool-result`、`tool-input-start`、`tool-input-delta`、`tool-input-end`、`permission`、`permission-blocked`、`mcp-error`、`compact-start`、`compact-finish`、`title`。同一会话允许同时有多个订阅者（多个标签页/窗口）：每个连接都会先收到缓存事件，之后的新事件广播给所有连接，断开其中一个不影响其他连接。
+`GET /sse/connect/{sessionId}` 推的事件类型：`agent-start`、`agent-resume`、`agent-finish`、`text-delta`、`reasoning-delta`、`retry`、`llm-start`、`llm-first-token`、`llm-finish`、`tool-call`、`tool-output`、`tool-result`、`tool-input-start`、`tool-input-delta`、`tool-input-end`、`permission`、`permission-review`、`permission-blocked`、`mcp-error`、`compact-start`、`compact-finish`、`title`。同一会话允许同时有多个订阅者（多个标签页/窗口）：每个连接都会先收到缓存事件，之后的新事件广播给所有连接，断开其中一个不影响其他连接。
+
+- `permission` 在 AI 审核不确定时另带 `review`（`reviewer`、`decision`、`reason`），说明为什么转人工；`permission-review` 是 AI 审核直接放行，带 `callID`、`tool`、`input`、`reviewer`、`decision`、`reason`；`permission-blocked` 在 AI 拒绝时也带 `review`。
 
 - `llm-start` 带 `startedAt`（这次请求的真实开始时间）和 `provider` / `model`。
 - `llm-first-token` 带 `firstTokenAt` / `firstTokenMs`；`llm-finish.usage` 带首字时间、总耗时、输入 / 输出 / 缓存和这次请求的 `provider` / `model`。
